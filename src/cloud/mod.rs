@@ -9,8 +9,8 @@ pub mod aws;
 pub mod azure;
 mod cloud_init;
 pub mod digitalocean;
-pub mod linode;
 pub mod gcp;
+pub mod linode;
 pub mod pwgen;
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]

@@ -1,0 +1,43 @@
+apiVersion: chisel-operator.io/v1
+kind: ExitNodeProvisioner
+metadata:
+  name: azure
+  namespace: default
+spec:
+  Azure:
+    # Secret containing `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`
+    auth: azure-credentials
+
+    # Subscription and resource group targets
+    subscription_id: 00000000-0000-0000-0000-000000000000
+    resource_group: chisel-exit-nodes
+
+    # Azure region (location) to deploy into
+    location: eastus
+
+    # Subnet resource ID used by the NIC
+    subnet_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/network-rg/providers/Microsoft.Network/virtualNetworks/main-vnet/subnets/default
+
+    # Optional network security group resource ID
+    network_security_group_id: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/network-rg/providers/Microsoft.Network/networkSecurityGroups/chisel-nsg
+
+    # VM size. Defaults to `Standard_B1s`.
+    vm_size: Standard_B1s
+
+    # Admin username for the VM shell. Defaults to `azureuser`.
+    admin_username: azureuser
+
+    # Optional SSH public key material
+    ssh_public_key: "ssh-rsa AAAAB3Nza..."
+
+    # Image reference (defaults shown)
+    image:
+      publisher: Canonical
+      offer: 0001-com-ubuntu-server-jammy
+      sku: 24_04-lts
+      version: latest
+
+    # Optional tags applied to Public IP, NIC, and VM
+    tags:
+      environment: production
+      owner: platform-team

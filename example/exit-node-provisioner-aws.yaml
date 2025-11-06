@@ -1,0 +1,18 @@
+apiVersion: chisel-operator.io/v1
+kind: ExitNodeProvisioner
+metadata:
+  name: aws
+  namespace: default
+spec:
+  AWS:
+    # Secret containing `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+    auth: aws-credentials
+
+    # Region where instances should be launched
+    region: us-west-2
+
+    # Optional security group ID to attach. Default security group is used when omitted.
+    security_group: sg-0123456789abcdef0
+
+    # EC2 instance type. Defaults to `t2.micro`.
+    size: t3.micro

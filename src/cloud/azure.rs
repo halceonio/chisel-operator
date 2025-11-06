@@ -218,11 +218,7 @@ async fn wait_for_provisioning(
     let url = management_url(resource_id, api_version);
 
     for attempt in 0..60 {
-        let response = client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let response = client.get(&url).bearer_auth(token).send().await?;
 
         if response.status().is_success() {
             let body: serde_json::Value = response.json().await?;
@@ -238,7 +234,8 @@ async fn wait_for_provisioning(
                 "Failed" => {
                     return Err(anyhow!(
                         "Azure {} provisioning failed for {}",
-                        resource_kind, resource_id
+                        resource_kind,
+                        resource_id
                     ))
                 }
                 _ => {}
@@ -258,7 +255,8 @@ async fn wait_for_provisioning(
 
     Err(anyhow!(
         "Timed out waiting for Azure {} provisioning for {}",
-        resource_kind, resource_id
+        resource_kind,
+        resource_id
     ))
 }
 
@@ -271,14 +269,13 @@ async fn delete_resource(
 ) -> Result<()> {
     let url = management_url(resource_id, api_version);
 
-    let response = client
-        .delete(&url)
-        .bearer_auth(token)
-        .send()
-        .await?;
+    let response = client.delete(&url).bearer_auth(token).send().await?;
 
     if response.status() == reqwest::StatusCode::NOT_FOUND {
-        debug!(resource_id, "Azure resource not found during delete, ignoring");
+        debug!(
+            resource_id,
+            "Azure resource not found during delete, ignoring"
+        );
         return Ok(());
     }
 
@@ -286,17 +283,15 @@ async fn delete_resource(
         let text = response.text().await.unwrap_or_default();
         return Err(anyhow!(
             "Failed to delete Azure {} {}: {}",
-            resource_kind, resource_id, text
+            resource_kind,
+            resource_id,
+            text
         ));
     }
 
     // Follow-up polling until the resource disappears
     for attempt in 0..60 {
-        let verify = client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let verify = client.get(&url).bearer_auth(token).send().await?;
 
         if verify.status() == reqwest::StatusCode::NOT_FOUND {
             debug!(resource_id, attempt, "Azure resource deleted");
@@ -308,7 +303,8 @@ async fn delete_resource(
 
     Err(anyhow!(
         "Timed out waiting for Azure {} deletion for {}",
-        resource_kind, resource_id
+        resource_kind,
+        resource_id
     ))
 }
 
@@ -392,10 +388,7 @@ async fn ensure_network_interface(
         properties
             .as_object_mut()
             .unwrap()
-            .insert(
-                "networkSecurityGroup".to_string(),
-                json!({ "id": nsg_id }),
-            );
+            .insert("networkSecurityGroup".to_string(), json!({ "id": nsg_id }));
     }
 
     let body = json!({
@@ -418,8 +411,14 @@ async fn ensure_network_interface(
         return Err(anyhow!("Azure NIC creation failed: {}", text));
     }
 
-    wait_for_provisioning(client, token, &ids.nic_id, NETWORK_API_VERSION, "network interface")
-        .await
+    wait_for_provisioning(
+        client,
+        token,
+        &ids.nic_id,
+        NETWORK_API_VERSION,
+        "network interface",
+    )
+    .await
 }
 
 async fn ensure_virtual_machine(
@@ -509,8 +508,14 @@ async fn ensure_virtual_machine(
         return Err(anyhow!("Azure VM creation failed: {}", text));
     }
 
-    wait_for_provisioning(client, token, &ids.vm_id, COMPUTE_API_VERSION, "virtual machine")
-        .await
+    wait_for_provisioning(
+        client,
+        token,
+        &ids.vm_id,
+        COMPUTE_API_VERSION,
+        "virtual machine",
+    )
+    .await
 }
 
 async fn fetch_public_ip(
@@ -521,11 +526,7 @@ async fn fetch_public_ip(
     let url = management_url(&ids.public_ip_id, NETWORK_API_VERSION);
 
     for attempt in 0..60 {
-        let response = client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let response = client.get(&url).bearer_auth(token).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -582,7 +583,8 @@ impl Provisioner for AzureProvisioner {
         let credentials = AzureCredentials::from_secret(&auth)?;
         let token = credentials.access_token(&client).await?;
 
-        let tracked = AzureTrackedResources::new(&self.subscription_id, &self.resource_group, &vm_name);
+        let tracked =
+            AzureTrackedResources::new(&self.subscription_id, &self.resource_group, &vm_name);
         let tags = build_tags(&self.tags, provisioner_label);
 
         ensure_public_ip(&client, &token, self, &tracked, &tags).await?;
@@ -660,10 +662,22 @@ impl Provisioner for AzureProvisioner {
         let token = credentials.access_token(&client).await?;
 
         info!(vm_id = %tracked.vm_id, "Deleting Azure virtual machine");
-        delete_resource(&client, &token, &tracked.vm_id, COMPUTE_API_VERSION, "virtual machine")
-            .await?;
-        delete_resource(&client, &token, &tracked.nic_id, NETWORK_API_VERSION, "network interface")
-            .await?;
+        delete_resource(
+            &client,
+            &token,
+            &tracked.vm_id,
+            COMPUTE_API_VERSION,
+            "virtual machine",
+        )
+        .await?;
+        delete_resource(
+            &client,
+            &token,
+            &tracked.nic_id,
+            NETWORK_API_VERSION,
+            "network interface",
+        )
+        .await?;
         delete_resource(
             &client,
             &token,

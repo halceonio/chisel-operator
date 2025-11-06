@@ -1,0 +1,15 @@
+apiVersion: chisel-operator.io/v1
+kind: ExitNodeProvisioner
+metadata:
+  name: linode
+  namespace: default
+spec:
+  Linode:
+    # Secret containing `LINODE_TOKEN`
+    auth: linode-credentials
+
+    # Region ID (https://api.linode.com/v4/regions)
+    region: us-east
+
+    # Instance type slug. Defaults to `g6-nanode-1`.
+    size: g6-nanode-1

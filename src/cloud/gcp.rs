@@ -200,10 +200,7 @@ fn zone_operation_url(project: &str, zone: &str, operation: &str) -> String {
 }
 
 fn project_network_default(project: &str) -> String {
-    format!(
-        "projects/{}/global/networks/default",
-        project
-    )
+    format!("projects/{}/global/networks/default", project)
 }
 
 fn sanitize_instance_name(name: &str) -> String {
@@ -250,11 +247,7 @@ async fn wait_for_zone_operation(
     let url = zone_operation_url(project, zone, operation);
 
     for attempt in 0..60 {
-        let response = client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let response = client.get(&url).bearer_auth(token).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -269,10 +262,7 @@ async fn wait_for_zone_operation(
 
             if status == "DONE" {
                 if let Some(error) = body.get("error") {
-                    return Err(anyhow!(
-                        "GCP operation {} failed: {}",
-                        action, error
-                    ));
+                    return Err(anyhow!("GCP operation {} failed: {}", action, error));
                 }
                 return Ok(());
             }
@@ -295,11 +285,7 @@ async fn fetch_instance_ip(
     let url = zone_instance_url(project, zone, instance);
 
     for attempt in 0..60 {
-        let response = client
-            .get(&url)
-            .bearer_auth(token)
-            .send()
-            .await?;
+        let response = client.get(&url).bearer_auth(token).send().await?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Err(anyhow!("GCP instance {} not found", instance));
@@ -371,9 +357,7 @@ impl Provisioner for GCPProvisioner {
             .service_account_email
             .clone()
             .unwrap_or_else(|| credentials.client_email.clone());
-        let token = credentials
-            .access_token(&client, &self.scopes)
-            .await?;
+        let token = credentials.access_token(&client, &self.scopes).await?;
 
         let machine_type = format!(
             "projects/{}/zones/{}/machineTypes/{}",
@@ -491,14 +475,8 @@ impl Provisioner for GCPProvisioner {
         )
         .await?;
 
-        let (public_ip, self_link) = fetch_instance_ip(
-            &client,
-            &token,
-            &self.project,
-            &self.zone,
-            &instance_name,
-        )
-        .await?;
+        let (public_ip, self_link) =
+            fetch_instance_ip(&client, &token, &self.project, &self.zone, &instance_name).await?;
 
         let tracked = GcpTrackedInstance::new(instance_name.clone(), self_link);
 
@@ -532,18 +510,10 @@ impl Provisioner for GCPProvisioner {
 
         let client = reqwest::Client::builder().build()?;
         let credentials = GcpCredentials::from_secret(&auth)?;
-        let token = credentials
-            .access_token(&client, &self.scopes)
-            .await?;
+        let token = credentials.access_token(&client, &self.scopes).await?;
 
-        let (public_ip, _) = fetch_instance_ip(
-            &client,
-            &token,
-            &self.project,
-            &self.zone,
-            &tracked.name,
-        )
-        .await?;
+        let (public_ip, _) =
+            fetch_instance_ip(&client, &token, &self.project, &self.zone, &tracked.name).await?;
 
         let mut new_status = status.clone();
         new_status.ip = public_ip;
@@ -564,9 +534,7 @@ impl Provisioner for GCPProvisioner {
 
         let client = reqwest::Client::builder().build()?;
         let credentials = GcpCredentials::from_secret(&auth)?;
-        let token = credentials
-            .access_token(&client, &self.scopes)
-            .await?;
+        let token = credentials.access_token(&client, &self.scopes).await?;
 
         let instance_url = zone_instance_url(&self.project, &self.zone, &tracked.name);
         let response = client

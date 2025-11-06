@@ -1,0 +1,41 @@
+apiVersion: chisel-operator.io/v1
+kind: ExitNodeProvisioner
+metadata:
+  name: gcp
+  namespace: default
+spec:
+  GCP:
+    # Secret containing a service-account key JSON under `GCP_SERVICE_ACCOUNT_KEY`
+    auth: gcp-service-account
+
+    # Project and zone for Compute Engine resources
+    project: my-gcp-project
+    zone: us-central1-a
+
+    # Machine type. Defaults to `e2-micro`.
+    machine_type: e2-small
+
+    # Optional VPC network and subnetwork self links
+    network: projects/my-gcp-project/global/networks/default
+    subnetwork: projects/my-gcp-project/regions/us-central1/subnetworks/default
+
+    # Disk image self link (defaults to Ubuntu 24.04 LTS family)
+    image: projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts
+
+    # Optional override for the instance service account email
+    service_account_email: chisel-vm@my-gcp-project.iam.gserviceaccount.com
+
+    # OAuth scopes granted to the instance service account. Defaults to Compute scope only.
+    scopes:
+      - https://www.googleapis.com/auth/compute
+      - https://www.googleapis.com/auth/logging.write
+
+    # Optional network tags applied to the instance
+    tags:
+      - chisel
+      - exit-node
+
+    # Optional labels applied to the instance
+    labels:
+      environment: staging
+      owner: platform-team

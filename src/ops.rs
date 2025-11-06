@@ -1,12 +1,8 @@
 use std::collections::BTreeMap;
 
 use crate::cloud::{
-    aws::AWSProvisioner,
-    azure::AzureProvisioner,
-    digitalocean::DigitalOceanProvisioner,
-    gcp::GCPProvisioner,
-    linode::LinodeProvisioner,
-    Provisioner,
+    aws::AWSProvisioner, azure::AzureProvisioner, digitalocean::DigitalOceanProvisioner,
+    gcp::GCPProvisioner, linode::LinodeProvisioner, Provisioner,
 };
 use color_eyre::Result;
 use itertools::Itertools;
