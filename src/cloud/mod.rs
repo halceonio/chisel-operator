@@ -6,9 +6,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub mod aws;
+pub mod azure;
 mod cloud_init;
 pub mod digitalocean;
 pub mod linode;
+pub mod gcp;
 pub mod pwgen;
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
@@ -16,6 +18,8 @@ pub enum CloudProvider {
     DigitalOcean,
     Linode,
     AWS,
+    Azure,
+    GCP,
 }
 
 // This code was actually used, weirdly enough

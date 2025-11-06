@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
 use crate::cloud::{
-    aws::AWSProvisioner, digitalocean::DigitalOceanProvisioner, linode::LinodeProvisioner,
+    aws::AWSProvisioner,
+    azure::AzureProvisioner,
+    digitalocean::DigitalOceanProvisioner,
+    gcp::GCPProvisioner,
+    linode::LinodeProvisioner,
     Provisioner,
 };
 use color_eyre::Result;
@@ -198,6 +202,8 @@ pub enum ExitNodeProvisionerSpec {
     DigitalOcean(DigitalOceanProvisioner),
     Linode(LinodeProvisioner),
     AWS(AWSProvisioner),
+    Azure(AzureProvisioner),
+    GCP(GCPProvisioner),
 }
 
 impl ExitNodeProvisionerSpec {
@@ -207,6 +213,8 @@ impl ExitNodeProvisionerSpec {
             ExitNodeProvisionerSpec::DigitalOcean(a) => Box::new(a),
             ExitNodeProvisionerSpec::Linode(a) => Box::new(a),
             ExitNodeProvisionerSpec::AWS(a) => Box::new(a),
+            ExitNodeProvisionerSpec::Azure(a) => Box::new(a),
+            ExitNodeProvisionerSpec::GCP(a) => Box::new(a),
         }
     }
 }
@@ -221,6 +229,8 @@ impl ExitNodeProvisioner {
             ExitNodeProvisionerSpec::DigitalOcean(a) => a.auth.clone(),
             ExitNodeProvisionerSpec::Linode(a) => a.auth.clone(),
             ExitNodeProvisionerSpec::AWS(a) => a.auth.clone(),
+            ExitNodeProvisionerSpec::Azure(a) => a.auth.clone(),
+            ExitNodeProvisionerSpec::GCP(a) => a.auth.clone(),
         };
 
         // Find a k8s secret with the name of the secret reference

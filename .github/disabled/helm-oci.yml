@@ -1,8 +1,8 @@
 name: Helm OCI
 
 on:
-  schedule:
-    - cron: "15 14 * * *"
+  # schedule:
+  #   - cron: "15 14 * * *"
   push:
     paths:
       - "charts/**"
@@ -35,7 +35,7 @@ jobs:
       - uses: appany/helm-oci-chart-releaser@v0.3.0
         with:
           name: chisel-operator
-          repository: fyralabs/chisel-operator
+          repository: halceonio/chisel-operator
           tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
           path: charts/chisel-operator
           registry: ghcr.io

@@ -27,6 +27,10 @@ spec:
               - Linode
             - required:
               - AWS
+            - required:
+              - Azure
+            - required:
+              - GCP
             properties:
               AWS:
                 properties:
@@ -47,6 +51,67 @@ spec:
                 required:
                 - auth
                 - region
+                type: object
+              Azure:
+                properties:
+                  admin_username:
+                    default: azureuser
+                    description: Admin username for the VM. If omitted, defaults to `azureuser`.
+                    type: string
+                  auth:
+                    description: Reference to a secret containing Azure credentials. The secret must contain the `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` keys.
+                    type: string
+                  image:
+                    properties:
+                      offer:
+                        default: 0001-com-ubuntu-server-jammy
+                        type: string
+                      publisher:
+                        default: Canonical
+                        type: string
+                      sku:
+                        default: 24_04-lts
+                        type: string
+                      version:
+                        default: latest
+                        type: string
+                    type: object
+                  location:
+                    description: Azure location/region (e.g. `eastus`).
+                    type: string
+                  network_security_group_id:
+                    description: Optional Network Security Group to attach to the network interface.
+                    nullable: true
+                    type: string
+                  resource_group:
+                    description: Azure resource group that will contain the provisioned resources.
+                    type: string
+                  ssh_public_key:
+                    description: Optional SSH public key to add to the VM.
+                    nullable: true
+                    type: string
+                  subnet_id:
+                    description: Subnet resource ID used for the network interface (e.g. `/subscriptions/.../virtualNetworks/.../subnets/default`).
+                    type: string
+                  subscription_id:
+                    description: Azure subscription ID where resources should be created.
+                    type: string
+                  tags:
+                    additionalProperties:
+                      type: string
+                    default: {}
+                    description: Additional tags to attach to all provisioned resources.
+                    type: object
+                  vm_size:
+                    default: Standard_B1s
+                    description: VM size to launch — defaults to `Standard_B1s`.
+                    type: string
+                required:
+                - auth
+                - subscription_id
+                - resource_group
+                - location
+                - subnet_id
                 type: object
               DigitalOcean:
                 properties:
@@ -85,6 +150,61 @@ spec:
                 required:
                 - auth
                 - region
+                type: object
+              GCP:
+                properties:
+                  auth:
+                    description: Reference to the secret containing a Google Cloud service account JSON key under `GCP_SERVICE_ACCOUNT_KEY`.
+                    type: string
+                  image:
+                    default: projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts
+                    description: Disk image to use.
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    default: {}
+                    description: Labels to apply to the instance.
+                    type: object
+                  machine_type:
+                    default: e2-micro
+                    description: Machine type to provision.
+                    type: string
+                  network:
+                    description: Optional fully-qualified network resource (defaults to the project's `default` network).
+                    nullable: true
+                    type: string
+                  project:
+                    description: Google Cloud project ID
+                    type: string
+                  scopes:
+                    default:
+                    - https://www.googleapis.com/auth/compute
+                    description: OAuth scopes to grant to the VM's service account.
+                    items:
+                      type: string
+                    type: array
+                  service_account_email:
+                    description: Optional service account email override. Defaults to the service account from the secret.
+                    nullable: true
+                    type: string
+                  subnetwork:
+                    description: Optional fully-qualified subnetwork resource.
+                    nullable: true
+                    type: string
+                  tags:
+                    default: []
+                    description: Network tags to apply.
+                    items:
+                      type: string
+                    type: array
+                  zone:
+                    description: Compute Engine zone (e.g. `us-central1-a`).
+                    type: string
+                required:
+                - auth
+                - project
+                - zone
                 type: object
             type: object
         required:
