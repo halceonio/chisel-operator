@@ -156,6 +156,10 @@ spec:
                   auth:
                     description: Reference to the secret containing a Google Cloud service account JSON key under `GCP_SERVICE_ACCOUNT_KEY`.
                     type: string
+                  firewall_rule:
+                    description: Optional firewall rule name or selfLink whose target tags should be applied to the instance.
+                    nullable: true
+                    type: string
                   image:
                     default: projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts
                     description: Disk image to use.

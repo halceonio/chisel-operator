@@ -7,6 +7,7 @@ use color_eyre::eyre::{anyhow, Result};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use k8s_openapi::api::core::v1::Secret;
 use kube::ResourceExt;
+use reqwest::StatusCode;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -37,6 +38,271 @@ fn default_labels() -> BTreeMap<String, String> {
 
 fn default_image() -> String {
     DEFAULT_IMAGE.to_string()
+}
+
+fn sanitize_label_component(
+    raw: &str,
+    require_letter_start: bool,
+    allow_empty: bool,
+) -> (String, bool) {
+    if raw.is_empty() {
+        return if allow_empty {
+            (String::new(), false)
+        } else {
+            (
+                String::from(if require_letter_start { "k" } else { "v" }),
+                true,
+            )
+        };
+    }
+
+    let mut changed = false;
+    let mut bytes: Vec<u8> = raw
+        .bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' => b,
+            b'A'..=b'Z' => {
+                changed = true;
+                b + 32
+            }
+            _ => {
+                changed = true;
+                b'-'
+            }
+        })
+        .collect();
+
+    let valid_start = |b: &u8| {
+        if require_letter_start {
+            b.is_ascii_lowercase()
+        } else {
+            b.is_ascii_lowercase() || b.is_ascii_digit()
+        }
+    };
+
+    if let Some(idx) = bytes.iter().position(valid_start) {
+        if idx > 0 {
+            bytes.drain(0..idx);
+            changed = true;
+        }
+    } else {
+        bytes.clear();
+    }
+
+    let mut end = bytes.len();
+    while end > 0 {
+        let b = bytes[end - 1];
+        if b.is_ascii_lowercase() || b.is_ascii_digit() {
+            break;
+        }
+        end -= 1;
+    }
+    if end < bytes.len() {
+        bytes.truncate(end);
+        changed = true;
+    }
+
+    if bytes.is_empty() {
+        if allow_empty {
+            return (String::new(), true);
+        }
+        let fallback = if require_letter_start { b'k' } else { b'v' };
+        bytes.push(fallback);
+        changed = true;
+    }
+
+    if require_letter_start && !bytes[0].is_ascii_lowercase() {
+        bytes.insert(0, b'k');
+        changed = true;
+    } else if !require_letter_start && !bytes[0].is_ascii_lowercase() && !bytes[0].is_ascii_digit()
+    {
+        bytes.insert(0, b'v');
+        changed = true;
+    }
+
+    if bytes.len() > 63 {
+        bytes.truncate(63);
+        changed = true;
+    }
+
+    (String::from_utf8(bytes).unwrap_or_default(), changed)
+}
+
+fn sanitize_label_key(raw: &str) -> (String, bool) {
+    sanitize_label_component(raw, true, false)
+}
+
+fn sanitize_label_value(raw: &str, allow_empty: bool) -> (String, bool) {
+    sanitize_label_component(raw, false, allow_empty)
+}
+
+fn sanitize_gcp_labels(
+    labels: &BTreeMap<String, String>,
+) -> (BTreeMap<String, String>, Vec<String>) {
+    let mut sanitized = BTreeMap::new();
+    let mut warnings = Vec::new();
+
+    for (key, value) in labels {
+        let (clean_key, key_changed) = sanitize_label_key(key);
+        let (clean_value, value_changed) = sanitize_label_value(value, true);
+
+        if key_changed || value_changed {
+            warnings.push(format!("{}={}", key, value));
+        }
+
+        if sanitized.insert(clean_key.clone(), clean_value).is_some() {
+            warnings.push(format!(
+                "Label key `{}` collided after sanitization; overwriting previous value",
+                clean_key
+            ));
+        }
+    }
+
+    (sanitized, warnings)
+}
+
+fn sanitize_network_tag(raw: &str) -> (String, bool) {
+    let mut changed = false;
+    let mut bytes: Vec<u8> = raw
+        .bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'0'..=b'9' | b'-' => b,
+            b'A'..=b'Z' => {
+                changed = true;
+                b + 32
+            }
+            _ => {
+                changed = true;
+                b'-'
+            }
+        })
+        .collect();
+
+    if let Some(idx) = bytes.iter().position(|b| b.is_ascii_lowercase()) {
+        if idx > 0 {
+            bytes.drain(0..idx);
+            changed = true;
+        }
+    } else {
+        bytes.clear();
+    }
+
+    let mut end = bytes.len();
+    while end > 0 {
+        let b = bytes[end - 1];
+        if b.is_ascii_lowercase() || b.is_ascii_digit() {
+            break;
+        }
+        end -= 1;
+    }
+    if end < bytes.len() {
+        bytes.truncate(end);
+        changed = true;
+    }
+
+    if bytes.is_empty() {
+        bytes.push(b't');
+        changed = true;
+    }
+
+    if bytes.len() > 63 {
+        bytes.truncate(63);
+        changed = true;
+    }
+
+    (
+        String::from_utf8(bytes).unwrap_or_else(|_| "t".into()),
+        changed,
+    )
+}
+
+fn push_unique_tag(tags: &mut Vec<String>, tag: String) {
+    if !tags.iter().any(|existing| existing == &tag) {
+        tags.push(tag);
+    }
+}
+
+fn normalize_network_reference(network: &str) -> String {
+    network
+        .trim_start_matches("https://www.googleapis.com/compute/v1/")
+        .trim_start_matches('/')
+        .to_string()
+}
+
+fn firewall_url(project: &str, rule: &str) -> String {
+    if rule.starts_with("https://") {
+        rule.to_string()
+    } else if rule.starts_with("projects/") {
+        format!(
+            "https://compute.googleapis.com/compute/v1/{}",
+            rule.trim_start_matches('/')
+        )
+    } else {
+        format!(
+            "https://compute.googleapis.com/compute/v1/projects/{}/global/firewalls/{}",
+            project, rule
+        )
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FirewallRuleResponse {
+    #[serde(rename = "targetTags", default)]
+    target_tags: Vec<String>,
+    network: Option<String>,
+    name: Option<String>,
+}
+
+async fn resolve_firewall_rule_tags(
+    client: &reqwest::Client,
+    token: &str,
+    project: &str,
+    firewall_rule: &str,
+    network: &str,
+) -> Result<Vec<String>> {
+    let url = firewall_url(project, firewall_rule);
+    let response = client.get(&url).bearer_auth(token).send().await?;
+
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(anyhow!(
+            "Firewall rule `{}` was not found in project `{}`",
+            firewall_rule,
+            project
+        ));
+    }
+
+    if !response.status().is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(anyhow!(
+            "Failed to fetch firewall rule `{}`: {}",
+            firewall_rule,
+            body
+        ));
+    }
+
+    let rule: FirewallRuleResponse = response.json().await?;
+    if let Some(rule_network) = rule.network.as_deref() {
+        let normalized_rule = normalize_network_reference(rule_network);
+        let normalized_request = normalize_network_reference(network);
+        if normalized_rule != normalized_request {
+            return Err(anyhow!(
+                "Firewall rule `{}` targets network `{}`, but the provisioner is configured for `{}`",
+                firewall_rule,
+                rule_network,
+                network
+            ));
+        }
+    }
+
+    if rule.target_tags.is_empty() {
+        return Err(anyhow!(
+            "Firewall rule `{}` does not define any targetTags. \
+             Please add targetTags to the firewall rule or configure `spec.GCP.tags` on the provisioner.",
+            firewall_rule
+        ));
+    }
+
+    Ok(rule.target_tags)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
@@ -71,6 +337,9 @@ pub struct GCPProvisioner {
     /// Labels to apply to the instance.
     #[serde(default = "default_labels")]
     pub labels: BTreeMap<String, String>,
+    /// Optional firewall rule name or selfLink whose target tags should be applied to the instance.
+    #[serde(default)]
+    pub firewall_rule: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -372,11 +641,62 @@ impl Provisioner for GCPProvisioner {
             .clone()
             .unwrap_or_else(|| project_network_default(&self.project));
 
-        let mut labels = self.labels.clone();
+        let (mut labels, label_warnings) = sanitize_gcp_labels(&self.labels);
+        for warning in label_warnings {
+            warn!(
+                label = %warning,
+                "Sanitized invalid GCP label to satisfy API requirements"
+            );
+        }
+
+        let (sanitized_provisioner_label, provisioner_label_changed) =
+            sanitize_label_value(provisioner_label, false);
+        if provisioner_label_changed {
+            warn!(
+                original = provisioner_label,
+                sanitized = sanitized_provisioner_label,
+                "Sanitized provisioner label value for GCP labels"
+            );
+        }
         labels.insert(
             "chisel-operator-provisioner".to_string(),
-            provisioner_label.to_string(),
+            sanitized_provisioner_label,
         );
+
+        let mut network_tags: Vec<String> = self
+            .tags
+            .iter()
+            .map(|tag| {
+                let (sanitized, changed) = sanitize_network_tag(tag);
+                if changed {
+                    warn!(
+                        original = tag,
+                        sanitized = sanitized,
+                        "Sanitized invalid GCP tag"
+                    );
+                }
+                sanitized
+            })
+            .collect();
+
+        if let Some(rule_name) = &self.firewall_rule {
+            let firewall_tags =
+                resolve_firewall_rule_tags(&client, &token, &self.project, rule_name, &network)
+                    .await?;
+
+            for tag in firewall_tags {
+                let (sanitized, changed) = sanitize_network_tag(&tag);
+                if changed {
+                    warn!(
+                        rule = rule_name,
+                        original = tag,
+                        sanitized = sanitized,
+                        "Sanitized firewall target tag returned by GCP"
+                    );
+                }
+                push_unique_tag(&mut network_tags, sanitized);
+            }
+        }
 
         let cloud_init = generate_cloud_init_config(&node_password, exit_node.spec.port);
 
@@ -435,11 +755,11 @@ impl Provisioner for GCPProvisioner {
             ]
         });
 
-        if !self.tags.is_empty() {
+        if !network_tags.is_empty() {
             body.as_object_mut().unwrap().insert(
                 "tags".to_string(),
                 json!({
-                    "items": self.tags.clone(),
+                    "items": network_tags,
                 }),
             );
         }

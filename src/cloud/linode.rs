@@ -122,9 +122,9 @@ impl Provisioner for LinodeProvisioner {
         // };
 
         let status = ExitNodeStatus::new(
-            instance_ip,
-            instance.label,
             provisioner.to_string(),
+            instance.label,
+            instance_ip,
             Some(instance.id.to_string()),
         );
 

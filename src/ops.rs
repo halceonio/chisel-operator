@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, net::IpAddr};
 
 use crate::cloud::{
     aws::AWSProvisioner, azure::AzureProvisioner, digitalocean::DigitalOceanProvisioner,
@@ -175,6 +175,20 @@ impl ExitNodeStatus {
             // service_binding: vec![],
         }
     }
+
+    /// Ensure the provider recorded in status matches the reconciler annotation and
+    /// fix up cases where the provider and ip fields were accidentally swapped.
+    pub fn align_with_provider(mut self, expected_provider: &str) -> Self {
+        let provider_is_ip = self.provider.parse::<IpAddr>().is_ok();
+        let ip_equals_expected = self.ip == expected_provider;
+
+        if provider_is_ip && ip_equals_expected {
+            std::mem::swap(&mut self.provider, &mut self.ip);
+        }
+
+        self.provider = expected_provider.to_string();
+        self
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
@@ -182,6 +196,39 @@ impl ExitNodeStatus {
 pub struct ServiceBinding {
     pub namespace: String,
     pub name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ExitNodeStatus;
+
+    #[test]
+    fn align_with_provider_swaps_reversed_fields() {
+        let status = ExitNodeStatus {
+            provider: "173.255.197.96".into(),
+            name: "linode-lin-exit-demo-1".into(),
+            ip: "linode".into(),
+            id: Some("86707585".into()),
+        }
+        .align_with_provider("linode");
+
+        assert_eq!(status.provider, "linode");
+        assert_eq!(status.ip, "173.255.197.96");
+    }
+
+    #[test]
+    fn align_with_provider_leaves_valid_status_untouched() {
+        let status = ExitNodeStatus {
+            provider: "linode".into(),
+            name: "linode-lin-exit-demo-1".into(),
+            ip: "173.255.197.96".into(),
+            id: Some("86707585".into()),
+        }
+        .align_with_provider("linode");
+
+        assert_eq!(status.provider, "linode");
+        assert_eq!(status.ip, "173.255.197.96");
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, CustomResource, Clone, JsonSchema)]
